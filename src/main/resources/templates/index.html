@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Boot Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 48px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        .card h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+        .card p {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        .badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 16px;
+        }
+        .api-section {
+            margin-top: 24px;
+            text-align: left;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .api-section h3 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        .api-link {
+            display: block;
+            color: #667eea;
+            text-decoration: none;
+            padding: 4px 0;
+            font-size: 14px;
+        }
+        .api-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1 th:text="${message}">Welcome!</h1>
+        <p>Your Spring Boot application is running.</p>
+        <p>Server time: <strong th:text="${time}">--</strong></p>
+        <span class="badge">Spring Boot 3.5.0</span>
+
+        <div class="api-section">
+            <h3>API Endpoints:</h3>
+            <a class="api-link" href="/api/hello">/api/hello</a>
+            <a class="api-link" href="/api/hello?name=Devin">/api/hello?name=Devin</a>
+            <a class="api-link" href="/api/health">/api/health</a>
+        </div>
+    </div>
+</body>
+</html>
