@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Ball Track Animation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #container { width: 100vw; height: 100vh; }
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+        .controls button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(102, 126, 234, 0.8);
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        .controls button:hover {
+            background: rgba(102, 126, 234, 1);
+            transform: scale(1.05);
+        }
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            z-index: 10;
+        }
+        .hint {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            z-index: 10;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="resetScene()">Reset</button>
+        <button onclick="togglePause()">Pause / Resume</button>
+        <button onclick="addBall()">+ Add Ball</button>
+    </div>
+    <div class="hint" id="hint">Click and drag a ball to move it. Right-click drag to rotate the camera.</div>
+    <div id="container"></div>
+    <div class="info">3D Ball Track Animation | Spring Boot Demo</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.FogExp2(0x0a0a1a, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 12, 25);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Orbit controls for camera rotation
+        const orbitControls = new OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+        orbitControls.maxPolarAngle = Math.PI / 2.1;
+        orbitControls.minDistance = 10;
+        orbitControls.maxDistance = 60;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x334466, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 80;
+        dirLight.shadow.camera.left = -30;
+        dirLight.shadow.camera.right = 30;
+        dirLight.shadow.camera.top = 30;
+        dirLight.shadow.camera.bottom = -30;
+        scene.add(dirLight);
+
+        const pointLight1 = new THREE.PointLight(0x667eea, 1, 50);
+        pointLight1.position.set(-10, 8, 5);
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(0xf093fb, 0.8, 50);
+        pointLight2.position.set(10, 8, -5);
+        scene.add(pointLight2);
+
+        // Stars
+        const starGeom = new THREE.BufferGeometry();
+        const starPositions = [];
+        for (let i = 0; i < 500; i++) {
+            starPositions.push(
+                (Math.random() - 0.5) * 200,
+                Math.random() * 100 + 10,
+                (Math.random() - 0.5) * 200
+            );
+        }
+        starGeom.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, transparent: true, opacity: 0.6 });
+        scene.add(new THREE.Points(starGeom, starMat));
+
+        // Track generation
+        const trackWidth = 3;
+        const trackCurve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-30, 2, 0),
+            new THREE.Vector3(-20, 5, 4),
+            new THREE.Vector3(-10, 1, -3),
+            new THREE.Vector3(0, 6, 2),
+            new THREE.Vector3(10, 2, -4),
+            new THREE.Vector3(20, 7, 3),
+            new THREE.Vector3(30, 3, 0),
+        ]);
+
+        // Create track mesh
+        const trackShape = new THREE.Shape();
+        trackShape.moveTo(-trackWidth / 2, -0.15);
+        trackShape.lineTo(trackWidth / 2, -0.15);
+        trackShape.lineTo(trackWidth / 2, 0.15);
+        trackShape.lineTo(-trackWidth / 2, 0.15);
+        trackShape.lineTo(-trackWidth / 2, -0.15);
+
+        const trackSegments = 200;
+        const extrudeSettings = {
+            steps: trackSegments,
+            extrudePath: trackCurve,
+        };
+        const trackGeom = new THREE.ExtrudeGeometry(trackShape, extrudeSettings);
+        const trackMat = new THREE.MeshStandardMaterial({
+            color: 0x667eea,
+            metalness: 0.6,
+            roughness: 0.3,
+            transparent: true,
+            opacity: 0.7,
+        });
+        const trackMesh = new THREE.Mesh(trackGeom, trackMat);
+        trackMesh.receiveShadow = true;
+        scene.add(trackMesh);
+
+        // Track edge glow
+        const edgePoints = trackCurve.getPoints(trackSegments);
+        const edgeGeom = new THREE.BufferGeometry().setFromPoints(edgePoints);
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x667eea, linewidth: 2, transparent: true, opacity: 0.8 });
+        const edgeLine = new THREE.Line(edgeGeom, edgeMat);
+        scene.add(edgeLine);
+
+        // Ground plane
+        const groundGeom = new THREE.PlaneGeometry(200, 200);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x111122,
+            metalness: 0.1,
+            roughness: 0.9,
+        });
+        const ground = new THREE.Mesh(groundGeom, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid
+        const gridHelper = new THREE.GridHelper(100, 50, 0x222244, 0x1a1a33);
+        gridHelper.position.y = -1.99;
+        scene.add(gridHelper);
+
+        // Ball class
+        const gravity = new THREE.Vector3(0, -9.8, 0);
+        const dt = 0.016;
+        const bounceFactor = 0.7;
+        const ballColors = [0x667eea, 0xf093fb, 0x4fd1c5, 0xf6ad55, 0xfc8181, 0x68d391];
+
+        class Ball3D {
+            constructor(position, radius, colorHex) {
+                this.radius = radius;
+                this.velocity = new THREE.Vector3(2 + Math.random() * 2, 0, Math.random() * 2 - 1);
+                this.isDragging = false;
+                this.onTrack = false;
+
+                const geom = new THREE.SphereGeometry(radius, 32, 32);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: colorHex,
+                    metalness: 0.4,
+                    roughness: 0.2,
+                    emissive: colorHex,
+                    emissiveIntensity: 0.15,
+                });
+                this.mesh = new THREE.Mesh(geom, mat);
+                this.mesh.position.copy(position);
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                this.mesh.userData.ball = this;
+                scene.add(this.mesh);
+
+                // Glow
+                const glowGeom = new THREE.SphereGeometry(radius * 1.3, 16, 16);
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.1,
+                });
+                this.glow = new THREE.Mesh(glowGeom, glowMat);
+                this.mesh.add(this.glow);
+
+                // Trail
+                const trailMax = 60;
+                const trailPositions = new Float32Array(trailMax * 3);
+                this.trailGeom = new THREE.BufferGeometry();
+                this.trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+                this.trailGeom.setDrawRange(0, 0);
+                const trailMat = new THREE.LineBasicMaterial({
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.4,
+                });
+                this.trail = new THREE.Line(this.trailGeom, trailMat);
+                scene.add(this.trail);
+                this.trailPoints = [];
+                this.trailMax = trailMax;
+            }
+
+            findClosestTrackPoint() {
+                const pos = this.mesh.position;
+                let minDist = Infinity;
+                let closestT = 0;
+                for (let i = 0; i <= 100; i++) {
+                    const t = i / 100;
+                    const pt = trackCurve.getPoint(t);
+                    const dist = pos.distanceTo(pt);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestT = t;
+                    }
+                }
+                // Refine
+                for (let i = -10; i <= 10; i++) {
+                    const t = Math.max(0, Math.min(1, closestT + i / 1000));
+                    const pt = trackCurve.getPoint(t);
+                    const dist = pos.distanceTo(pt);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestT = t;
+                    }
+                }
+                return { t: closestT, point: trackCurve.getPoint(closestT), distance: minDist };
+            }
+
+            update() {
+                if (this.isDragging) return;
+
+                // Apply gravity
+                this.velocity.addScaledVector(gravity, dt);
+
+                // Update position
+                this.mesh.position.addScaledVector(this.velocity, dt);
+
+                // Track collision
+                const closest = this.findClosestTrackPoint();
+                if (closest.distance < this.radius + 0.15) {
+                    const trackPt = closest.point;
+                    const tangent = trackCurve.getTangent(closest.t);
+                    const normal = new THREE.Vector3().subVectors(this.mesh.position, trackPt).normalize();
+
+                    // Push ball above track surface
+                    this.mesh.position.copy(trackPt).addScaledVector(normal, this.radius + 0.15);
+
+                    // Reflect velocity
+                    const vn = this.velocity.dot(normal);
+                    if (vn < 0) {
+                        if (Math.abs(vn) > 1.5) {
+                            // Bounce
+                            this.velocity.addScaledVector(normal, -vn * (1 + bounceFactor));
+                            this.onTrack = false;
+                        } else {
+                            // Roll: remove normal component, add tangential gravity
+                            this.velocity.addScaledVector(normal, -vn);
+                            const gravTangent = tangent.clone().multiplyScalar(gravity.dot(tangent) * dt);
+                            this.velocity.add(gravTangent);
+                            this.onTrack = true;
+                        }
+                    }
+
+                    // Friction
+                    this.velocity.multiplyScalar(0.995);
+                }
+
+                // Ground collision
+                if (this.mesh.position.y < this.radius - 2) {
+                    this.mesh.position.y = this.radius - 2;
+                    this.velocity.y = -this.velocity.y * bounceFactor;
+                    this.velocity.x *= 0.98;
+                    this.velocity.z *= 0.98;
+                }
+
+                // Wrap around X
+                if (this.mesh.position.x > 35) {
+                    this.mesh.position.x = -35;
+                    this.trailPoints = [];
+                }
+                if (this.mesh.position.x < -35) {
+                    this.mesh.position.x = 35;
+                    this.trailPoints = [];
+                }
+
+                // Rotate ball based on velocity
+                const speed = this.velocity.length();
+                if (speed > 0.01) {
+                    const axis = new THREE.Vector3(0, 1, 0).cross(this.velocity).normalize();
+                    if (axis.length() > 0) {
+                        this.mesh.rotateOnWorldAxis(axis, speed * dt * 2);
+                    }
+                }
+
+                // Update trail
+                this.trailPoints.push(this.mesh.position.clone());
+                if (this.trailPoints.length > this.trailMax) this.trailPoints.shift();
+                const positions = this.trailGeom.attributes.position.array;
+                for (let i = 0; i < this.trailPoints.length; i++) {
+                    positions[i * 3] = this.trailPoints[i].x;
+                    positions[i * 3 + 1] = this.trailPoints[i].y;
+                    positions[i * 3 + 2] = this.trailPoints[i].z;
+                }
+                this.trailGeom.attributes.position.needsUpdate = true;
+                this.trailGeom.setDrawRange(0, this.trailPoints.length);
+            }
+
+            dispose() {
+                scene.remove(this.mesh);
+                scene.remove(this.trail);
+                this.trailGeom.dispose();
+            }
+        }
+
+        let balls = [];
+        let paused = false;
+
+        function createInitialBalls() {
+            balls.push(new Ball3D(new THREE.Vector3(-25, 10, 0), 0.6, ballColors[0]));
+            balls.push(new Ball3D(new THREE.Vector3(-20, 12, 1), 0.5, ballColors[1]));
+            balls.push(new Ball3D(new THREE.Vector3(-15, 14, -1), 0.7, ballColors[2]));
+        }
+        createInitialBalls();
+
+        // Mouse drag logic
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let dragBall = null;
+        const dragPlane = new THREE.Plane();
+        const dragOffset = new THREE.Vector3();
+        const intersection = new THREE.Vector3();
+
+        function onMouseDown(event) {
+            if (event.button !== 0) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const meshes = balls.map(b => b.mesh);
+            const intersects = raycaster.intersectObjects(meshes);
+
+            if (intersects.length > 0) {
+                orbitControls.enabled = false;
+                const obj = intersects[0].object;
+                dragBall = obj.userData.ball;
+                dragBall.isDragging = true;
+                dragBall.velocity.set(0, 0, 0);
+
+                const camDir = camera.getWorldDirection(new THREE.Vector3());
+                dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), dragBall.mesh.position);
+
+                raycaster.ray.intersectPlane(dragPlane, intersection);
+                dragOffset.subVectors(dragBall.mesh.position, intersection);
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!dragBall) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            raycaster.ray.intersectPlane(dragPlane, intersection);
+
+            const newPos = intersection.add(dragOffset);
+            dragBall.mesh.position.copy(newPos);
+        }
+
+        function onMouseUp() {
+            if (dragBall) {
+                dragBall.isDragging = false;
+                dragBall = null;
+                orbitControls.enabled = true;
+            }
+        }
+
+        renderer.domElement.addEventListener('mousedown', onMouseDown);
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('mouseup', onMouseUp);
+
+        // Touch support
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            onMouseDown({ button: 0, clientX: touch.clientX, clientY: touch.clientY });
+        }, { passive: false });
+        renderer.domElement.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }, { passive: false });
+        renderer.domElement.addEventListener('touchend', onMouseUp);
+
+        // Button handlers exposed to global scope
+        window.resetScene = function() {
+            balls.forEach(b => b.dispose());
+            balls = [];
+            createInitialBalls();
+        };
+
+        window.togglePause = function() {
+            paused = !paused;
+            if (!paused) animate();
+        };
+
+        window.addBall = function() {
+            const color = ballColors[balls.length % ballColors.length];
+            const radius = 0.4 + Math.random() * 0.4;
+            const pos = new THREE.Vector3(-25 + Math.random() * 10, 12 + Math.random() * 5, Math.random() * 4 - 2);
+            balls.push(new Ball3D(pos, radius, color));
+        };
+
+        // Hide hint after 5 seconds
+        setTimeout(() => {
+            const hint = document.getElementById('hint');
+            if (hint) hint.style.opacity = '0';
+        }, 5000);
+
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        let time = 0;
+        function animate() {
+            if (paused) return;
+            requestAnimationFrame(animate);
+
+            time += dt;
+            orbitControls.update();
+
+            // Animate lights gently
+            pointLight1.position.x = -10 + Math.sin(time * 0.5) * 3;
+            pointLight2.position.x = 10 + Math.cos(time * 0.3) * 3;
+
+            for (const ball of balls) {
+                ball.update();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
